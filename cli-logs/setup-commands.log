@@ -1,0 +1,182 @@
+================================================================
+SETUP COMMANDS LOG
+Assignment 5: Cloud Privilege Escalation Simulation
+Region: us-east-1
+All account IDs, key material redacted as <ACCOUNT_ID> / <REDACTED>
+================================================================
+
+--- CLI configuration ---
+
+PS C:\Users\USER> aws configure --profile bincom-admin
+AWS Access Key ID [None]: <REDACTED>
+AWS Secret Access Key [None]: <REDACTED>
+Default region name [None]: us-east-1
+Default output format [None]: json
+
+Note: "aws sts get-caller-identity --profile bincom-admin" did not return
+output on first attempt in this terminal session. As a workaround, the
+public IP address needed for the security group rule (below) was retrieved
+via the EC2 console security group inbound rule editor, using its
+"My IP" auto detect feature, which is functionally equivalent to
+"curl ifconfig.me".
+
+--- Network layer ---
+
+PS C:\Users\USER> aws ec2 create-vpc --cidr-block 10.0.0.0/16 --tag-specifications "ResourceType=vpc,Tags=[{Key=Name,Value=bincom-privesc-vpc}]" --profile bincom-admin
+{
+    "Vpc": {
+        "OwnerId": "<ACCOUNT_ID>",
+        "InstanceTenancy": "default",
+        "CidrBlockAssociationSet": [
+            {
+                "AssociationId": "vpc-cidr-assoc-03e65aa96f9af26bd",
+                "CidrBlock": "10.0.0.0/16",
+                "CidrBlockState": { "State": "associated" }
+            }
+        ],
+        "IsDefault": false,
+        "Tags": [ { "Key": "Name", "Value": "bincom-privesc-vpc" } ],
+        "VpcId": "vpc-01d4ff00ae4c24ee2",
+        "State": "pending",
+        "CidrBlock": "10.0.0.0/16",
+        "DhcpOptionsId": "dopt-06bdc2bea37c72c0a"
+    }
+}
+
+PS C:\Users\USER> aws ec2 create-subnet --vpc-id vpc-01d4ff00ae4c24ee2 --cidr-block 10.0.1.0/24 --availability-zone us-east-1a --tag-specifications "ResourceType=subnet,Tags=[{Key=Name,Value=bincom-privesc-subnet}]" --profile bincom-admin
+[Result: SubnetId = subnet-014b46080b850a527]
+
+PS C:\Users\USER> aws ec2 create-internet-gateway --tag-specifications "ResourceType=internet-gateway,Tags=[{Key=Name,Value=bincom-privesc-igw}]" --profile bincom-admin
+[Result: InternetGatewayId noted locally]
+
+PS C:\Users\USER> aws ec2 attach-internet-gateway --vpc-id vpc-01d4ff00ae4c24ee2 --internet-gateway-id <IGW_ID> --profile bincom-admin
+
+PS C:\Users\USER> aws ec2 create-route-table --vpc-id vpc-01d4ff00ae4c24ee2 --tag-specifications "ResourceType=route-table,Tags=[{Key=Name,Value=bincom-privesc-rt}]" --profile bincom-admin
+[Result: RouteTableId noted locally]
+
+PS C:\Users\USER> aws ec2 create-route --route-table-id <ROUTE_TABLE_ID> --destination-cidr-block 0.0.0.0/0 --gateway-id <IGW_ID> --profile bincom-admin
+
+PS C:\Users\USER> aws ec2 associate-route-table --route-table-id <ROUTE_TABLE_ID> --subnet-id subnet-014b46080b850a527 --profile bincom-admin
+
+PS C:\Users\USER> aws ec2 modify-subnet-attribute --subnet-id subnet-014b46080b850a527 --map-public-ip-on-launch --profile bincom-admin
+
+PS C:\Users\USER> aws ec2 create-security-group --group-name bincom-privesc-sg --description "SSH access for privesc lab" --vpc-id vpc-01d4ff00ae4c24ee2 --profile bincom-admin
+[Result: GroupId = sg-07dd6d0efee71dcaf]
+
+PS C:\Users\USER> aws ec2 authorize-security-group-ingress --group-id sg-07dd6d0efee71dcaf --protocol tcp --port 22 --cidr <YOUR_IP>/32 --profile bincom-admin
+
+--- IAM role and instance profile (escalation target) ---
+
+PS C:\Users\USER> notepad trust-policy.json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "Service": "ec2.amazonaws.com" },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+
+PS C:\Users\USER> aws iam create-role --role-name EC2-Admin-Role --assume-role-policy-document file://trust-policy.json --profile bincom-admin
+{
+    "Role": {
+        "Path": "/",
+        "RoleName": "EC2-Admin-Role",
+        "RoleId": "AROA36RW26SYCHM6PPL4J",
+        "Arn": "arn:aws:iam::<ACCOUNT_ID>:role/EC2-Admin-Role",
+        "CreateDate": "2026-09-23T18:06:34+00:00",
+        "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": { "Service": "ec2.amazonaws.com" },
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        }
+    }
+}
+
+PS C:\Users\USER> aws iam attach-role-policy --role-name EC2-Admin-Role --policy-arn arn:aws:iam::aws:policy/AdministratorAccess --profile bincom-admin
+[No output on success]
+
+PS C:\Users\USER> aws iam create-instance-profile --instance-profile-name EC2-Admin-Instance-Profile --profile bincom-admin
+{
+    "InstanceProfile": {
+        "Path": "/",
+        "InstanceProfileName": "EC2-Admin-Instance-Profile",
+        "InstanceProfileId": "AIPA36RW26SYGYODO432C",
+        "Arn": "arn:aws:iam::<ACCOUNT_ID>:instance-profile/EC2-Admin-Instance-Profile",
+        "CreateDate": "2026-09-23T18:14:16+00:00",
+        "Roles": []
+    }
+}
+
+PS C:\Users\USER> aws iam add-role-to-instance-profile --instance-profile-name EC2-Admin-Instance-Profile --role-name EC2-Admin-Role --profile bincom-admin
+[No output on success]
+
+--- Vulnerable IAM user ---
+
+PS C:\Users\USER> notepad vulnerable-policy.json
+[See policies/vulnerable-policy.json]
+
+PS C:\Users\USER> aws iam create-user --user-name bincom-dev-user --profile bincom-admin
+{
+    "User": {
+        "Path": "/",
+        "UserName": "bincom-dev-user",
+        "UserId": "AIDA36RW26SYFDEXAFIT6",
+        "Arn": "arn:aws:iam::<ACCOUNT_ID>:user/bincom-dev-user",
+        "CreateDate": "2026-09-24T06:06:22+00:00"
+    }
+}
+
+PS C:\Users\USER> aws iam create-policy --policy-name BincomDevUserPolicy --policy-document file://vulnerable-policy.json --profile bincom-admin
+{
+    "Policy": {
+        "PolicyName": "BincomDevUserPolicy",
+        "PolicyId": "ANPA36RW26SYO5F2ZYMN6",
+        "Arn": "arn:aws:iam::<ACCOUNT_ID>:policy/BincomDevUserPolicy",
+        "Path": "/",
+        "DefaultVersionId": "v1",
+        "AttachmentCount": 0,
+        "IsAttachable": true,
+        "CreateDate": "2026-09-24T06:10:02+00:00",
+        "UpdateDate": "2026-09-24T06:10:02+00:00"
+    }
+}
+
+PS C:\Users\USER> aws iam attach-user-policy --user-name bincom-dev-user --policy-arn arn:aws:iam::<ACCOUNT_ID>:policy/BincomDevUserPolicy --profile bincom-admin
+[No output on success]
+
+PS C:\Users\USER> aws iam create-access-key --user-name bincom-dev-user --profile bincom-admin
+{
+    "AccessKey": {
+        "UserName": "bincom-dev-user",
+        "AccessKeyId": "<REDACTED>",
+        "Status": "Active",
+        "SecretAccessKey": "<REDACTED>",
+        "CreateDate": "2026-09-24T06:16:37+00:00"
+    }
+}
+
+PS C:\Users\USER> aws configure --profile bincom-dev-user
+AWS Access Key ID [None]: <REDACTED>
+AWS Secret Access Key [None]: <REDACTED>
+Default region name [None]: us-east-1
+Default output format [None]: json
+
+PS C:\Users\USER> aws sts get-caller-identity --profile bincom-dev-user
+{
+    "UserId": "<REDACTED>",
+    "Account": "<ACCOUNT_ID>",
+    "Arn": "arn:aws:iam::<ACCOUNT_ID>:user/bincom-dev-user"
+}
+
+================================================================
+END OF SETUP LOG. See privesc-commands.log for the exploitation
+sequence and remediation-commands.log for the fix and re-test.
+================================================================

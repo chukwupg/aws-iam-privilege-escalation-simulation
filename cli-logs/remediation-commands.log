@@ -1,0 +1,62 @@
+================================================================
+REMEDIATION COMMANDS LOG
+Assignment 5: Cloud Privilege Escalation Simulation
+All account IDs redacted as <ACCOUNT_ID>
+================================================================
+
+--- Create a legitimate, low privilege role for contrast ---
+
+PS C:\Users\USER> aws iam create-role --role-name EC2-Limited-Role --assume-role-policy-document file://trust-policy.json --profile bincom-admin
+{
+    "Role": {
+        "Path": "/",
+        "RoleName": "EC2-Limited-Role",
+        "RoleId": "AROA36RW26SYHZC46WFPH",
+        "Arn": "arn:aws:iam::<ACCOUNT_ID>:role/EC2-Limited-Role",
+        "CreateDate": "2026-09-24T08:55:56+00:00"
+    }
+}
+
+PS C:\Users\USER> aws iam attach-role-policy --role-name EC2-Limited-Role --policy-arn arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess --profile bincom-admin
+[No output on success]
+
+--- Save and apply the fixed policy ---
+
+PS C:\Users\USER> notepad fixed-policy.json
+[See policies/fixed-policy.json]
+
+PS C:\Users\USER> aws iam create-policy-version --policy-arn arn:aws:iam::<ACCOUNT_ID>:policy/BincomDevUserPolicy --policy-document file://fixed-policy.json --set-as-default --profile bincom-admin
+{
+    "PolicyVersion": {
+        "VersionId": "v2",
+        "IsDefaultVersion": true,
+        "CreateDate": "2026-09-24T09:06:26+00:00"
+    }
+}
+
+--- Re-attempt the exploit: expect denial ---
+
+PS C:\Users\USER> aws ec2 run-instances --image-id ami-0bdbbea3e76315b75 --instance-type t3.small --key-name bincom-privesc-key --security-group-ids sg-07dd6d0efee71dcaf --subnet-id subnet-014b46080b850a527 --iam-instance-profile Name=EC2-Admin-Instance-Profile --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=privesc-retry-blocked}]" --profile bincom-dev-user
+
+aws: [ERROR]: An error occurred (UnauthorizedOperation) when calling the
+RunInstances operation: You are not authorized to perform this operation.
+User: arn:aws:iam::<ACCOUNT_ID>:user/bincom-dev-user is not authorized to
+perform: iam:PassRole on resource: arn:aws:iam::<ACCOUNT_ID>:role/EC2-Admin-Role
+because no identity-based policy allows the iam:PassRole action.
+Encoded authorization failure message: <REDACTED, long encoded string>
+
+--- Verify the legitimate path still works ---
+
+PS C:\Users\USER> aws iam create-instance-profile --instance-profile-name EC2-Limited-Instance-Profile --profile bincom-admin
+PS C:\Users\USER> aws iam add-role-to-instance-profile --instance-profile-name EC2-Limited-Instance-Profile --role-name EC2-Limited-Role --profile bincom-admin
+
+PS C:\Users\USER> aws ec2 run-instances --image-id ami-0bdbbea3e76315b75 --instance-type t3.small --key-name bincom-privesc-key --security-group-ids sg-07dd6d0efee71dcaf --subnet-id subnet-014b46080b850a527 --iam-instance-profile Name=EC2-Limited-Instance-Profile --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=privesc-legit-path}]" --profile bincom-dev-user
+[Result: launch succeeded, instance running with EC2-Limited-Role attached]
+
+================================================================
+RESULT: the escalation path via EC2-Admin-Role is blocked with a clear,
+specific AccessDenied / UnauthorizedOperation error. The legitimate
+workflow, launching an instance with the approved EC2-Limited-Role,
+continues to succeed. The fix is confirmed least privilege, not merely
+restrictive.
+================================================================
