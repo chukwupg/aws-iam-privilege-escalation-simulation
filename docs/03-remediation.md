@@ -1,5 +1,7 @@
 # Remediation: Least Privilege Fix
 
+For the full, unformatted terminal output behind this section, see [`07-remediation-cli-logs.md`](07-remediation-cli-logs.md), or the raw original in [`../cli-logs/remediation-commands.log`](../cli-logs/remediation-commands.log).
+
 ## Fix strategy
 
 The root cause was an `iam:PassRole` permission with `Resource: "*"` and no condition. The fix preserves the legitimate need, `bincom-dev-user` must still be able to launch EC2 instances with a role attached, while removing the ability to choose an arbitrary, high privilege role. Two changes were made:
@@ -58,7 +60,8 @@ Result: `VersionId = v2`, set as the default version of `BincomDevUserPolicy`.
 
 `EC2-Limited-Role` was attached to `AmazonSSMReadOnlyAccess`, a harmless, read only policy, chosen purely to give the role a distinct, non dangerous identity for contrast against `EC2-Admin-Role`.
 
-Screenshot: `screenshots/remediation/fixed-policy-console.png`
+![IAM console showing BincomDevUserPolicy version 2 as the default version, with the updated JSON visible](../screenshots/remediation/fixed-policy-console.png)
+*BincomDevUserPolicy, version 2, set as default*
 
 ## Verification: the exploit is blocked
 
@@ -85,7 +88,8 @@ because no identity-based policy allows the iam:PassRole action.
 
 The fixed policy correctly denies the exact action that made the original escalation possible, and names the specific permission that is missing.
 
-Screenshot: `screenshots/remediation/access-denied-retry.png`
+![Terminal output showing the UnauthorizedOperation / AccessDenied error when re-attempting the exploit after the fix](../screenshots/remediation/access-denied-retry.png)
+*Exploit re-attempt after the fix, correctly denied*
 
 ## Verification: legitimate access still works
 
@@ -102,8 +106,7 @@ aws ec2 run-instances --image-id ami-0bdbbea3e76315b75 --instance-type t3.small 
 
 This launch succeeded, confirming the user's legitimate ability to launch EC2 instances was preserved while the escalation path was closed.
 
-Screenshot: 
-
-!(legitimate path)[/screenshots/remediation/legitimate-path-ec2-limited-role.png]
+![EC2 console instance detail page showing an instance running with IAM Role: EC2-Limited-Role attached, launched successfully by bincom-dev-user](../screenshots/remediation/legitimate-path-ec2-limited-role.png)
+*Legitimate path: instance running with the approved EC2-Limited-Role*
 
 Continue to [`04-lessons-learned.md`](04-lessons-learned.md) for takeaways from this exercise.
