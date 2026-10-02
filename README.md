@@ -6,6 +6,7 @@ The technique demonstrated is privilege escalation via `iam:PassRole` combined w
 
 All work was performed in an isolated, purpose built VPC inside a personal AWS sandbox account, and every resource created was torn down at the end of the exercise.
 
+
 > This project was built for a training environment only. Every technique shown here was executed against resources I own, inside an isolated account and network, with no other systems or data involved. Do not run privilege escalation techniques against any AWS account you do not own or have explicit, written authorization to test.
 
 ## What this demonstrates
@@ -17,25 +18,29 @@ All work was performed in an isolated, purpose built VPC inside a personal AWS s
 ## Repository structure
 
 ```text
-bincom-assignment5-iam-privesc/
+aws-iam-privilege-escalation-simulation/
 ├── README.md                        This file
 ├── docs/
-│   ├── 01-vulnerability-design.md   The misconfiguration and why it is exploitable
-│   ├── 02-exploitation-steps.md     Full step by step privilege escalation walkthrough
-│   ├── 03-remediation.md            The least privilege fix and its verification
-│   └── 04-lessons-learned.md        What this exercise teaches about IAM hygiene
+│   ├── 01-vulnerability-design.md      The misconfiguration and why it is exploitable
+│   ├── 02-exploitation-steps.md        Full step by step privilege escalation walkthrough, with screenshots
+│   ├── 03-remediation.md               The least privilege fix and its verification, with screenshots
+│   ├── 04-lessons-learned.md           What this exercise teaches about IAM hygiene
+│   ├── 05-setup-logs.md                Readable, formatted version of setup-commands.log
+│   ├── 06-exploitation-logs.md         Readable, formatted version of privesc-commands.log
+│   └── 07-remediation-logs.md          Readable, formatted version of remediation-commands.log
 ├── screenshots/
-│   ├── iam-setup/                   Network, role, and vulnerable user screenshots
-│   ├── privesc-attempt/             Exploitation screenshots
-│   └── remediation/                 Fix and verification screenshots
+│   ├── iam-setup/                      Network, role, and vulnerable user screenshots
+│   ├── privesc-attempt/                Exploitation screenshots
+│   ├── remediation/                    Fix and verification screenshots
+│   └── cleanup/                        Final verification pass screenshot
 ├── cli-logs/
-│   ├── setup-commands.log           VPC, IAM role, and vulnerable user creation
-│   ├── privesc-commands.log         The exploitation sequence
-│   └── remediation-commands.log     Fix application and re-test
+│   ├── setup-commands.log              Raw terminal capture: VPC, IAM role, vulnerable user creation
+│   ├── privesc-commands.log            Raw terminal capture: the exploitation sequence
+│   └── remediation-commands.log        Raw terminal capture: fix application and re-test
 ├── policies/
-│   ├── vulnerable-policy.json       The original, misconfigured policy
-│   └── fixed-policy.json            The corrected, least privilege policy
-└── cleanup.md                       Full teardown of every resource created
+│   ├── vulnerable-policy.json          The original, misconfigured policy
+│   └── fixed-policy.json               The corrected, least privilege policy
+└── cleanup.md                          Full teardown of every resource created
 ```
 
 ## Technique summary
@@ -62,7 +67,7 @@ All account IDs, access keys, secret keys, and session tokens in this repository
 
 ## Reproducing this lab
 
-The full command sequence, with expected output, is documented in `cli-logs/` and referenced throughout `docs/`. Reproducing it requires:
+The full command sequence, with expected output, is documented two ways: `docs/05-setup-logs.md`, `docs/06-exploitation-logs.md`, and `docs/07-remediation-logs.md` present it as readable, formatted markdown, while `cli-logs/` holds the raw, unformatted terminal captures for anyone who wants the original, copy paste friendly commands. Reproducing it requires:
 
 1. An AWS account you own or are authorized to test in, ideally a sandbox account.
 2. The AWS CLI v2, configured with an administrator profile.
