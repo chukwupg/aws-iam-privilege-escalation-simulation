@@ -1,0 +1,13 @@
+# Never commit private key material
+*.pem
+*.ppk
+
+# Never commit AWS credentials
+.aws/
+credentials
+config
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
